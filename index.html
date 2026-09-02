@@ -226,190 +226,140 @@ function generatePDF(){
     btn.disabled=true;
 
     try {
-        const svgSource=document.getElementById('main-car-svg');
-        const svgElement=svgSource.cloneNode(true);
-        svgElement.removeAttribute('onclick');
-        svgElement.setAttribute('xmlns','http://www.w3.org/2000/svg');
-        svgElement.setAttribute('width','500');
-        svgElement.setAttribute('height','1000');
-        svgElement.setAttribute('viewBox','0 0 240 480');
+        const stConfig={
+            good:{t:'سليم',bg:'#22c55e',color:'#fff'},
+            warning:{t:'يحتاج متابعة',bg:'#eab308',color:'#000'},
+            problem:{t:'توجد مشكلة',bg:'#ef4444',color:'#fff'}
+        };
 
-        svgElement.querySelectorAll('[onclick]').forEach(el=>el.removeAttribute('onclick'));
-        svgElement.querySelectorAll('.car-part').forEach(el=>{
-            const savedInfo=iData[el.id];
-            const color=savedInfo
-                ? (savedInfo.status==='good'?'#22c55e':savedInfo.status==='warning'?'#eab308':'#ef4444')
+        let extRows='', mechRows='';
+        for(const [id,saved] of Object.entries(iData)){
+            const info=partMap[id];
+            if(!info) continue;
+            const st=stConfig[saved.status] || stConfig.warning;
+            const notes=(saved.notes||'').trim() || '-';
+            const row=`<tr>
+                <td>${escapeHTML(info.name)}</td>
+                <td><span class="status" style="background:${st.bg};color:${st.color}">${st.t}</span></td>
+                <td>${escapeHTML(notes)}</td>
+            </tr>`;
+            if(info.cat==='exterior') extRows += row;
+            if(info.cat==='mechanics') mechRows += row;
+        }
+
+        // Create a clean, printable report in a new tab.
+        const report = window.open('', '_blank');
+        if(!report){
+            throw new Error('POPUP_BLOCKED');
+        }
+
+        const now=new Date();
+        const dateStr=now.toLocaleDateString('ar-JO')+' | '+now.toLocaleTimeString('ar-JO');
+
+        // Draw the car diagram as a PNG synchronously from the current SVG.
+        const svg=document.getElementById('main-car-svg').cloneNode(true);
+        svg.setAttribute('xmlns','http://www.w3.org/2000/svg');
+        svg.setAttribute('width','500');
+        svg.setAttribute('height','1000');
+        svg.setAttribute('viewBox','0 0 240 480');
+        svg.querySelectorAll('[onclick]').forEach(e=>e.removeAttribute('onclick'));
+
+        svg.querySelectorAll('.car-part').forEach(el=>{
+            const saved=iData[el.id];
+            const color=saved
+                ? (saved.status==='good'?'#22c55e':saved.status==='warning'?'#eab308':'#ef4444')
                 : '#e2e8f0';
             el.setAttribute('fill',color);
             el.style.fill=color;
-            if(el.tagName.toLowerCase()==='g'){
-                el.querySelectorAll('*').forEach(child=>{
-                    child.setAttribute('fill',color);
-                    child.style.fill=color;
-                });
-            }
         });
 
-        // تحويل SVG إلى PNG بواسطة Blob URL، وهو أكثر ثباتاً مع html2canvas وGitHub Pages
-        const svgBlob=new Blob([new XMLSerializer().serializeToString(svgElement)],{type:'image/svg+xml;charset=utf-8'});
-        const svgUrl=URL.createObjectURL(svgBlob);
+        const svgText=new XMLSerializer().serializeToString(svg);
+        const svgData='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svgText);
 
-        const svgImg=new Image();
-        svgImg.onload=function(){
-            const canvas=document.createElement('canvas');
-            canvas.width=1000;
-            canvas.height=2000;
-            const ctx=canvas.getContext('2d');
-            ctx.fillStyle='#ffffff';
-            ctx.fillRect(0,0,canvas.width,canvas.height);
-            ctx.drawImage(svgImg,0,0,canvas.width,canvas.height);
-            const diagramPNG=canvas.toDataURL('image/png');
-            URL.revokeObjectURL(svgUrl);
+        report.document.open();
+        report.document.write(`<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>تقرير فحص - ${escapeHTML(vData['v-make']||'مركبة')}</title>
+<style>
+@page{size:A4 portrait;margin:10mm}
+*{box-sizing:border-box}
+body{margin:0;background:#fff;color:#0f172a;font-family:Arial,Tahoma,sans-serif;direction:rtl}
+.toolbar{position:sticky;top:0;background:#fff;padding:12px;text-align:center;border-bottom:1px solid #ddd}
+.toolbar button{border:0;border-radius:8px;padding:10px 22px;background:#2563eb;color:#fff;font-size:16px;cursor:pointer}
+.report{width:100%;max-width:190mm;margin:0 auto}
+.header{text-align:center;border-bottom:3px solid #2563eb;padding-bottom:12px;margin-bottom:15px}
+.header h1{margin:0;font-size:23px}
+.header p{margin:5px 0 0;color:#64748b;font-size:15px}
+.info{width:100%;border-collapse:collapse;margin-bottom:18px;background:#f8fafc}
+.info td{border:1px solid #cbd5e1;padding:8px;font-size:13px}
+.section-title{background:#1e293b;color:#fff;padding:8px 12px;margin:14px 0 0;font-size:16px}
+.data{width:100%;border-collapse:collapse;margin-bottom:18px}
+.data th,.data td{border:1px solid #cbd5e1;padding:8px;font-size:13px;text-align:right;vertical-align:top}
+.data th{background:#f1f5f9}
+.status{display:inline-block;padding:4px 8px;border-radius:4px;font-weight:bold;white-space:nowrap}
+.diagram{text-align:center;padding:10px;background:#f8fafc;border:1px solid #e2e8f0;margin-top:0}
+.diagram img{display:block;width:105mm;height:190mm;object-fit:contain;margin:auto}
+.legend{margin-top:8px;font-weight:bold;font-size:13px}
+.footer{display:flex;justify-content:space-between;gap:20px;margin-top:20px;padding:0 15px;font-weight:bold;font-size:13px;page-break-inside:avoid}
+.signature{text-align:center}
+.signature span{display:inline-block;margin-top:8px;font-size:20px;color:#2563eb;font-style:italic}
+@media print{.toolbar{display:none}.report{max-width:none}.section-title,.data,.diagram,.footer{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">🖨️ طباعة / حفظ كـ PDF</button></div>
+<main class="report">
+<div class="header">
+<h1>تقرير فحص فني شامل للمركبة</h1>
+<p>MOHAMMAD RUM</p>
+</div>
 
-            let extRows='',mechRows='';
-            const stConfig={
-                good:{t:'سليم',bg:'#22c55e',color:'#fff'},
-                warning:{t:'يحتاج متابعة',bg:'#eab308',color:'#000'},
-                problem:{t:'توجد مشكلة',bg:'#ef4444',color:'#fff'}
-            };
+<table class="info">
+<tr><td><b>المالك:</b> ${escapeHTML(vData['v-owner']||'-')}</td><td><b>المركبة:</b> ${escapeHTML(vData['v-make']||'-')} - ${escapeHTML(vData['v-model']||'')}</td></tr>
+<tr><td><b>رقم اللوحة:</b> ${escapeHTML(vData['v-plate']||'-')}</td><td><b>رقم الشاصي:</b> ${escapeHTML(vData['v-vin']||'-')}</td></tr>
+<tr><td><b>التاريخ والوقت:</b> ${dateStr}</td><td><b>قراءة العداد:</b> ${vData['v-km']?escapeHTML(vData['v-km'])+' كم':'-'}</td></tr>
+</table>
 
-            for(const [id,saved] of Object.entries(iData)){
-                const info=partMap[id];
-                if(!info) continue;
-                const st=stConfig[saved.status]||stConfig.warning;
-                const notes=(saved.notes||'').trim()||'-';
-                const rowHTML=`
-                <tr>
-                    <td style="border:1px solid #cbd5e1;padding:10px;font-weight:bold;width:30%;">${escapeHTML(info.name)}</td>
-                    <td style="border:1px solid #cbd5e1;padding:10px;width:20%;text-align:center;">
-                        <span style="background:${st.bg};color:${st.color};padding:4px 8px;border-radius:4px;font-size:10pt;">${st.t}</span>
-                    </td>
-                    <td style="border:1px solid #cbd5e1;padding:10px;width:50%;color:#475569;">${escapeHTML(notes)}</td>
-                </tr>`;
-                if(info.cat==='exterior') extRows+=rowHTML;
-                if(info.cat==='mechanics') mechRows+=rowHTML;
-            }
+${extRows?`<div class="section-title">أولاً: فحص الهيكل الخارجي والبودي</div>
+<table class="data"><thead><tr><th>الجزء</th><th>الحالة</th><th>الملاحظات</th></tr></thead><tbody>${extRows}</tbody></table>`:''}
 
-            const now=new Date();
-            const dateStr=now.toLocaleDateString('ar-JO')+' | '+now.toLocaleTimeString('ar-JO');
+${mechRows?`<div class="section-title">ثانياً: فحص الميكانيك والأنظمة</div>
+<table class="data"><thead><tr><th>الجزء</th><th>الحالة</th><th>الملاحظات</th></tr></thead><tbody>${mechRows}</tbody></table>`:''}
 
-            const printTemplate=document.createElement('div');
-            printTemplate.id='pdf-print-template';
-            printTemplate.style.cssText='position:fixed;left:-10000px;top:0;width:794px;background:#fff;z-index:-1;';
-            printTemplate.innerHTML=`
-            <div style="padding:28px;font-family:'Tajawal',Arial,sans-serif;direction:rtl;background:#fff;width:794px;box-sizing:border-box;color:#0f172a;">
-                <div style="text-align:center;border-bottom:3px solid #2563eb;padding-bottom:18px;margin-bottom:18px;">
-                    <h1 style="margin:0;font-size:24pt;color:#1e293b;">تقرير فحص فني شامل للمركبة</h1>
-                    <p style="margin:5px 0 0;font-size:12pt;color:#64748b;">MOHAMMAD RUM</p>
-                </div>
+<div class="section-title">ثالثاً: المخطط التوضيحي لحالة الهيكل</div>
+<div class="diagram">
+<img src="${svgData}" alt="مخطط السيارة">
+<div class="legend">
+<span style="color:#22c55e">🟩 سليم</span>&nbsp;&nbsp;
+<span style="color:#eab308">🟨 ملاحظة</span>&nbsp;&nbsp;
+<span style="color:#ef4444">🟥 مشكلة</span>
+</div>
+</div>
 
-                <table style="width:100%;margin-bottom:22px;border-collapse:collapse;font-size:11pt;background:#f8fafc;">
-                    <tr>
-                        <td style="padding:9px;border:1px solid #e2e8f0;"><strong>المالك:</strong> ${escapeHTML(vData['v-owner']||'-')}</td>
-                        <td style="padding:9px;border:1px solid #e2e8f0;"><strong>المركبة:</strong> ${escapeHTML(vData['v-make']||'-')} - ${escapeHTML(vData['v-model']||'')}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding:9px;border:1px solid #e2e8f0;"><strong>رقم اللوحة:</strong> <span style="direction:ltr;display:inline-block;">${escapeHTML(vData['v-plate']||'-')}</span></td>
-                        <td style="padding:9px;border:1px solid #e2e8f0;"><strong>رقم الشاصي:</strong> ${escapeHTML(vData['v-vin']||'-')}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding:9px;border:1px solid #e2e8f0;"><strong>التاريخ والوقت:</strong> ${dateStr}</td>
-                        <td style="padding:9px;border:1px solid #e2e8f0;"><strong>قراءة العداد:</strong> ${vData['v-km']?escapeHTML(vData['v-km'])+' كم':'-'}</td>
-                    </tr>
-                </table>
+<div class="footer">
+<div>المركز: MOHAMMAD RUM<br>الموقع: عمان، الأردن</div>
+<div class="signature">توقيع الفاحص المعتمد:<br><span>MOHAMMAD RUM</span></div>
+</div>
+</main>
+<script>
+window.onload=function(){setTimeout(function(){window.print()},500)}
+<\/script>
+</body></html>`);
+        report.document.close();
 
-                ${extRows?`
-                <h3 style="background:#1e293b;color:#fff;padding:8px 15px;margin:0;font-size:12pt;">أولاً: فحص الهيكل الخارجي والبودي</h3>
-                <table style="width:100%;border-collapse:collapse;margin-bottom:22px;font-size:10.5pt;text-align:right;">
-                    <thead style="background:#f1f5f9;"><tr>
-                        <th style="border:1px solid #cbd5e1;padding:8px;">الجزء</th>
-                        <th style="border:1px solid #cbd5e1;padding:8px;">الحالة</th>
-                        <th style="border:1px solid #cbd5e1;padding:8px;">الملاحظات</th>
-                    </tr></thead>
-                    <tbody>${extRows}</tbody>
-                </table>`:''}
-
-                ${mechRows?`
-                <h3 style="background:#1e293b;color:#fff;padding:8px 15px;margin:0;font-size:12pt;">ثانياً: فحص الميكانيك والأنظمة</h3>
-                <table style="width:100%;border-collapse:collapse;margin-bottom:22px;font-size:10.5pt;text-align:right;">
-                    <thead style="background:#f1f5f9;"><tr>
-                        <th style="border:1px solid #cbd5e1;padding:8px;">الجزء</th>
-                        <th style="border:1px solid #cbd5e1;padding:8px;">الحالة</th>
-                        <th style="border:1px solid #cbd5e1;padding:8px;">الملاحظات</th>
-                    </tr></thead>
-                    <tbody>${mechRows}</tbody>
-                </table>`:''}
-
-                <div style="page-break-inside:avoid;break-inside:avoid;">
-                    <h3 style="background:#1e293b;color:#fff;padding:8px 15px;margin:0 0 10px;font-size:12pt;">ثالثاً: المخطط التوضيحي لحالة الهيكل</h3>
-                    <div style="text-align:center;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
-                        <img src="${diagramPNG}" style="display:block;width:210px;height:420px;object-fit:contain;margin:0 auto;" />
-                        <div style="margin-top:10px;font-size:10pt;font-weight:bold;">
-                            <span style="color:#22c55e;">🟩 سليم</span>&nbsp;&nbsp;&nbsp;
-                            <span style="color:#eab308;">🟨 ملاحظة</span>&nbsp;&nbsp;&nbsp;
-                            <span style="color:#ef4444;">🟥 مشكلة</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div style="display:flex;justify-content:space-between;margin-top:28px;padding:0 20px;font-size:11pt;font-weight:bold;color:#1e293b;page-break-inside:avoid;">
-                    <div style="padding-top:15px;">المركز: MOHAMMAD RUM<br>الموقع: الأردن</div>
-                    <div style="text-align:center;">توقيع الفاحص المعتمد:<br>
-                        <span style="font-family:Arial,sans-serif;font-size:16pt;color:#2563eb;font-style:italic;display:inline-block;margin-top:10px;">MOHAMMAD RUM</span>
-                    </div>
-                </div>
-            </div>`;
-
-            document.body.appendChild(printTemplate);
-
-            // انتظار تحميل الخطوط قبل التصوير
-            const finishPDF=()=>{
-                html2pdf().set({
-                    margin:0,
-                    filename:`تقرير_فحص_${sanitizeFilename(vData['v-make']||'مركبة')}.pdf`,
-                    image:{type:'jpeg',quality:0.98},
-                    html2canvas:{
-                        scale:2,
-                        useCORS:true,
-                        allowTaint:false,
-                        backgroundColor:'#ffffff',
-                        logging:false,
-                        imageTimeout:15000
-                    },
-                    pagebreak:{mode:['css','legacy']},
-                    jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}
-                }).from(printTemplate).save().then(()=>{
-                    printTemplate.remove();
-                    btn.innerHTML='📑 إنهاء وتوليد التقرير PDF';
-                    btn.disabled=false;
-                }).catch(err=>{
-                    console.error(err);
-                    printTemplate.remove();
-                    btn.innerHTML='📑 إنهاء وتوليد التقرير PDF';
-                    btn.disabled=false;
-                    alert('حدث خطأ أثناء إنشاء التقرير. تأكد من اتصال الإنترنت ثم حاول مرة أخرى.');
-                });
-            };
-
-            if(document.fonts && document.fonts.ready){
-                document.fonts.ready.then(()=>setTimeout(finishPDF,500));
-            }else{
-                setTimeout(finishPDF,800);
-            };
-        };
-        svgImg.onerror=function(){
-            URL.revokeObjectURL(svgUrl);
-            btn.innerHTML='📑 إنهاء وتوليد التقرير PDF';
-            btn.disabled=false;
-            alert('تعذر تجهيز مخطط السيارة للتقرير.');
-        };
-        svgImg.src=svgUrl;
-
-    } catch(err){
+        btn.innerHTML='📑 إنهاء وتوليد التقرير PDF';
+        btn.disabled=false;
+    } catch(err) {
         console.error(err);
         btn.innerHTML='📑 إنهاء وتوليد التقرير PDF';
         btn.disabled=false;
-        alert('حدث خطأ أثناء تجهيز التقرير.');
+        if(err.message==='POPUP_BLOCKED'){
+            alert('المتصفح منع نافذة التقرير. اسمح بالنوافذ المنبثقة لهذا الموقع ثم اضغط زر التقرير مرة أخرى.');
+        } else {
+            alert('حدث خطأ أثناء تجهيز التقرير: '+err.message);
+        }
     }
 }
 
