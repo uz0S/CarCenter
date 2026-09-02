@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام فحص المركبات الشامل</title>
+    <!-- مكتبة تحويل PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap');
+
+        body { font-family: 'Tajawal', sans-serif; background-color: #f1f5f9; color: #0f172a; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .main-container { width: 100%; max-width: 900px; }
+
+        /* شريط التقدم */
+        .stepper { display: flex; justify-content: space-between; margin-bottom: 30px; background: white; padding: 15px 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); position: relative; }
+        .step-indicator { display: flex; flex-direction: column; align-items: center; gap: 8px; font-weight: bold; color: #94a3b8; transition: 0.3s; z-index: 2; background: white; padding: 0 10px; }
+        .step-indicator.active { color: #2563eb; }
+        .step-indicator.completed { color: #16a34a; }
+        .step-circle { width: 40px; height: 40px; border-radius: 50%; background: #f1f5f9; display: flex; justify-content: center; align-items: center; font-size: 18px; transition: 0.3s; }
+        .step-indicator.active .step-circle { background: #2563eb; color: white; box-shadow: 0 0 0 4px rgba(37,99,235,0.1); }
+        .step-indicator.completed .step-circle { background: #16a34a; color: white; }
+        .stepper::before { content: ''; position: absolute; top: 35px; left: 50px; right: 50px; height: 3px; background: #e2e8f0; z-index: 1; }
+
+        .step-content { background: white; padding: 35px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.03); display: none; animation: fadeIn 0.4s ease forwards; margin-bottom: 20px; }
+        .step-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        h2 { margin-top: 0; color: #1e293b; font-size: 22px; margin-bottom: 25px; }
+
+        /* النماذج */
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 500; font-size: 14px; color: #475569; }
+        .form-control { width: 100%; padding: 12px 15px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: inherit; font-size: 15px; box-sizing: border-box; transition: 0.2s; }
+        .form-control:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+
+        /* رسمة السيارة */
+        .car-inspection-area { text-align: center; padding: 20px; background: #f8fafc; border-radius: 12px; border: 1px dashed #cbd5e1; margin-bottom: 20px;}
+        .car-part { cursor: pointer; transition: 0.2s; }
+        .car-part:hover { opacity: 0.7; }
+        
+        /* الألوان التفاعلية */
+        .svg-good, .svg-good * { fill: #22c55e !important; }
+        .svg-warning, .svg-warning * { fill: #eab308 !important; }
+        .svg-problem, .svg-problem * { fill: #ef4444 !important; }
+        
+        .btn-good { background: #22c55e !important; color: white !important; border-color: #22c55e !important; }
+        .btn-warning { background: #eab308 !important; color: #1e293b !important; border-color: #eab308 !important; }
+        .btn-problem { background: #ef4444 !important; color: white !important; border-color: #ef4444 !important; }
+
+        /* كروت الميكانيك */
+        .inspection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .inspect-card { background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px 15px; text-align: center; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .inspect-card:hover { border-color: #94a3b8; transform: translateY(-3px); }
+        .inspect-card .icon { font-size: 30px; }
+        .inspect-card .title { font-weight: bold; font-size: 14px; color: #334155; }
+        .inspect-card .status-badge { font-size: 12px; font-weight: bold; padding: 4px 10px; border-radius: 20px; background: #e2e8f0; color: #64748b; }
+        
+        .card-good { border-color: #22c55e !important; background: #f0fdf4 !important; }
+        .card-good .status-badge { background: #22c55e; color: white; }
+        .card-warning { border-color: #eab308 !important; background: #fefce8 !important; }
+        .card-warning .status-badge { background: #eab308; color: #1e293b; }
+        .card-problem { border-color: #ef4444 !important; background: #fef2f2 !important; }
+        .card-problem .status-badge { background: #ef4444; color: white; }
+
+        /* الأزرار */
+        .btn { padding: 14px 24px; border: none; border-radius: 8px; font-size: 15px; font-weight: bold; font-family: inherit; cursor: pointer; transition: 0.2s; }
+        .btn-primary { background: #2563eb; color: white; box-shadow: 0 4px 12px rgba(37,99,235,0.2); }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-secondary { background: #e2e8f0; color: #475569; }
+        .btn-secondary:hover { background: #cbd5e1; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-success:hover { background: #059669; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-outline { background: white; border: 2px solid #cbd5e1; color: #334155; }
+        .btn-outline:hover { background: #f8fafc; border-color: #94a3b8; }
+        
+        .actions { display: flex; justify-content: space-between; margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0;}
+
+        /* النافذة المنبثقة */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(5px); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; padding: 30px; border-radius: 16px; width: 90%; max-width: 400px; text-align: right; animation: slideDown 0.3s; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-header h3 { margin: 0; }
+        .close-btn { background: none; border: none; font-size: 28px; cursor: pointer; color: #94a3b8; padding: 0; line-height: 1; }
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        <!-- شريط التقدم -->
+        <div class="stepper">
+            <div class="step-indicator active" id="indicator-1"><div class="step-circle">1</div><span>بيانات المركبة</span></div>
+            <div class="step-indicator" id="indicator-2"><div class="step-circle">2</div><span>الهيكل والبودي</span></div>
+            <div class="step-indicator" id="indicator-3"><div class="step-circle">3</div><span>الميكانيك</span></div>
+        </div>
+
+        <!-- الخطوة 1: بيانات المركبة -->
+        <div class="step-content active" id="step-1">
+            <h2>📝 المعلومات الأساسية للمركبة</h2>
+            <div class="form-grid">
+                <div class="form-group"><label>اسم المالك / العميل</label><input type="text" id="v-owner" class="form-control" oninput="saveData()"></div>
+                <div class="form-group"><label>نوع السيارة (مطلوب)</label><input type="text" id="v-make" class="form-control" placeholder="مثال: تويوتا كامري" oninput="saveData()" required></div>
+                <div class="form-group"><label>رقم اللوحة (مطلوب)</label><input type="text" id="v-plate" class="form-control" oninput="saveData()" required></div>
+                <div class="form-group"><label>الموديل وسنة الصنع</label><input type="text" id="v-model" class="form-control" oninput="saveData()"></div>
+                <div class="form-group"><label>رقم الشاصي (VIN)</label><input type="text" id="v-vin" class="form-control" oninput="saveData()"></div>
+                <div class="form-group"><label>قراءة العداد (كم)</label><input type="number" id="v-km" class="form-control" oninput="saveData()"></div>
+            </div>
+            <div class="actions" style="justify-content: space-between;">
+                <button class="btn btn-danger" onclick="resetSystem()">🔄 تفريغ الحقول وفحص جديد</button>
+                <button class="btn btn-primary" onclick="goToStep(2)">التالي: فحص الهيكل ⬅️</button>
+            </div>
+        </div>
+
+        <!-- الخطوة 2: فحص الهيكل الخارجي -->
+        <div class="step-content" id="step-2">
+            <h2>🚘 فحص الهيكل الخارجي والبودي</h2>
+            <p style="color: #64748b; margin-top: -15px;">اضغط على أي جزء لتقييم حالته.</p>
+            
+            <div class="car-inspection-area">
+                <!-- SVG السيارة الأساسي -->
+                <svg id="main-car-svg" viewBox="0 0 240 480" width="240" height="480" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" style="display:block; max-width:320px; width:100%; height:auto; margin:0 auto; filter:drop-shadow(0 10px 15px rgba(0,0,0,0.1));">
+                    <rect id="ext-tire-fl" class="car-part" onclick="openModal('ext-tire-fl')" x="15" y="80" width="25" height="55" rx="5" fill="#475569" stroke="#1e293b" stroke-width="2"/>
+                    <rect id="ext-tire-fr" class="car-part" onclick="openModal('ext-tire-fr')" x="200" y="80" width="25" height="55" rx="5" fill="#475569" stroke="#1e293b" stroke-width="2"/>
+                    <rect id="ext-tire-rl" class="car-part" onclick="openModal('ext-tire-rl')" x="15" y="320" width="25" height="55" rx="5" fill="#475569" stroke="#1e293b" stroke-width="2"/>
+                    <rect id="ext-tire-rr" class="car-part" onclick="openModal('ext-tire-rr')" x="200" y="320" width="25" height="55" rx="5" fill="#475569" stroke="#1e293b" stroke-width="2"/>
+                    <polygon id="ext-bumper-f" class="car-part" onclick="openModal('ext-bumper-f')" points="70,25 170,25 180,40 60,40" fill="#e2e8f0" stroke="#334155" stroke-width="2"/>
+                    <polygon id="ext-hood" class="car-part" onclick="openModal('ext-hood')" points="60,40 180,40 200,120 40,120" fill="#e2e8f0" stroke="#334155" stroke-width="2"/>
+                    <g id="ext-lights-f" class="car-part" onclick="openModal('ext-lights-f')">
+                        <polygon points="65,42 95,42 90,55 60,55" fill="#fef08a" stroke="#334155" stroke-width="1.5"/>
+                        <polygon points="175,42 145,42 150,55 180,55" fill="#fef08a" stroke="#334155" stroke-width="1.5"/>
+                    </g>
+                    <polygon id="ext-glass-f" class="car-part" onclick="openModal('ext-glass-f')" points="40,120 200,120 180,160 60,160" fill="#cbd5e1" stroke="#334155" stroke-width="2"/>
+                    <polygon id="ext-roof" class="car-part" onclick="openModal('ext-roof')" points="60,160 180,160 180,310 60,310" fill="#e2e8f0" stroke="#334155" stroke-width="2"/>
+                    <polygon id="ext-door-fl" class="car-part" onclick="openModal('ext-door-fl')" points="40,120 60,160 60,235 35,235" fill="#e2e8f0" stroke="#334155" stroke-width="2"/>
+                    <polygon id="ext-door-rl" class="car-part" onclick="openModal('ext-door-rl')" points="35,235 60,235 60,310 40,350" fill="#e2e8f0" stroke="#334155" stroke-width="2"/>
+                    <polygon id="ext-door-fr" class="car-part" onclick="openModal('ext-door-fr')" points="200,120 180,160 180,235 205,235" fill="#e2e8f0" stroke="#334155" stroke-width="2"/>
+                    <polygon id="ext-door-rr" class="car-part" onclick="openModal('ext-door-rr')" points="205,235 180,235 180,310 200,350" fill="#e2e8f0" stroke="#334155" stroke-width="2"/>
+                    <polygon id="ext-glass-r" class="car-part" onclick="openModal('ext-glass-r')" points="60,310 180,310 200,350 40,350" fill="#cbd5e1" stroke="#334155" stroke-width="2"/>
+                    <polygon id="ext-trunk" class="car-part" onclick="openModal('ext-trunk')" points="40,350 200,350 180,440 60,440" fill="#e2e8f0" stroke="#334155" stroke-width="2"/>
+                    <polygon id="ext-bumper-r" class="car-part" onclick="openModal('ext-bumper-r')" points="60,440 180,440 170,455 70,455" fill="#e2e8f0" stroke="#334155" stroke-width="2"/>
+                    <g id="ext-lights-r" class="car-part" onclick="openModal('ext-lights-r')">
+                        <polygon points="65,438 95,438 100,425 60,425" fill="#fca5a5" stroke="#334155" stroke-width="1.5"/>
+                        <polygon points="175,438 145,438 140,425 180,425" fill="#fca5a5" stroke="#334155" stroke-width="1.5"/>
+                    </g>
+                </svg>
+
+                <div style="display: flex; gap: 15px; justify-content: center; margin-top: 25px; flex-wrap: wrap;">
+                    <button id="ext-paint" class="btn btn-outline" onclick="openModal('ext-paint')">🎨 حالة الدهان العامة</button>
+                    <button id="ext-chassis" class="btn btn-outline" onclick="openModal('ext-chassis')">🔨 الشاصي والأساسات</button>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button class="btn btn-secondary" onclick="goToStep(1)">➡️ رجوع</button>
+                <button class="btn btn-primary" onclick="goToStep(3)">التالي: فحص الميكانيك ⬅️</button>
+            </div>
+        </div>
+
+        <!-- الخطوة 3: فحص الميكانيك -->
+        <div class="step-content" id="step-3">
+            <h2>⚙️ فحص الميكانيك والأنظمة</h2>
+            <p style="color: #64748b; margin-top: -15px;">التقييم الفني لأداء المحرك، ناقل الحركة، والأنظمة الداخلية.</p>
+            
+            <div class="inspection-grid" id="grid-mechanics"></div>
+
+            <div class="actions">
+                <button class="btn btn-secondary" onclick="goToStep(2)">➡️ رجوع</button>
+                <button class="btn btn-success" id="btn-download" onclick="generatePDF()">📑 إنهاء وتوليد التقرير PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- النافذة المنبثقة -->
+    <div class="modal-overlay" id="inspectModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">اسم الجزء</h3>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label>التقييم الفني:</label>
+                <select id="part-status" class="form-control">
+                    <option value="good">✅ سليم وممتاز</option>
+                    <option value="warning">⚠️ يحتاج صيانة / ملاحظة</option>
+                    <option value="problem">❌ مشكلة حرجة</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>ملاحظات إضافية (تظهر بالتقرير):</label>
+                <textarea id="part-notes" class="form-control" rows="3" placeholder="اكتب وصفاً دقيقاً كخدش، ضربة، أو عطل..."></textarea>
+            </div>
+            <button class="btn btn-primary" style="width: 100%; margin-top: 20px;" onclick="savePartInspect()">حفظ التقييم</button>
+        </div>
+    </div>
+
+    <script>
+        const partMap = {
+            'ext-bumper-f': { name: 'الصدام (الدعامية) الأمامي', cat: 'exterior', type: 'svg' },
+            'ext-hood': { name: 'الكبوت (الغطاء الأمامي)', cat: 'exterior', type: 'svg' },
+            'ext-trunk': { name: 'الصندوق الخلفي (الدبة)', cat: 'exterior', type: 'svg' },
+            'ext-bumper-r': { name: 'الصدام (الدعامية) الخلفي', cat: 'exterior', type: 'svg' },
+            'ext-roof': { name: 'سقف السيارة', cat: 'exterior', type: 'svg' },
+            'ext-glass-f': { name: 'الزجاج الأمامي', cat: 'exterior', type: 'svg' },
+            'ext-glass-r': { name: 'الزجاج الخلفي', cat: 'exterior', type: 'svg' },
+            'ext-door-fl': { name: 'باب أمامي يسار', cat: 'exterior', type: 'svg' },
+            'ext-door-fr': { name: 'باب أمامي يمين', cat: 'exterior', type: 'svg' },
+            'ext-door-rl': { name: 'باب خلفي يسار', cat: 'exterior', type: 'svg' },
+            'ext-door-rr': { name: 'باب خلفي يمين', cat: 'exterior', type: 'svg' },
+            'ext-tire-fl': { name: 'إطار أمامي يسار', cat: 'exterior', type: 'svg' },
+            'ext-tire-fr': { name: 'إطار أمامي يمين', cat: 'exterior', type: 'svg' },
+            'ext-tire-rl': { name: 'إطار خلفي يسار', cat: 'exterior', type: 'svg' },
+            'ext-tire-rr': { name: 'إطار خلفي يمين', cat: 'exterior', type: 'svg' },
+            'ext-lights-f': { name: 'الأنوار الأمامية', cat: 'exterior', type: 'svg' },
+            'ext-lights-r': { name: 'الأنوار الخلفية', cat: 'exterior', type: 'svg' },
+            'ext-paint': { name: 'حالة الدهان العامة', cat: 'exterior', type: 'btn' },
+            'ext-chassis': { name: 'الشاصي والأساسات', cat: 'exterior', type: 'btn' },
+            
+            'mech-engine': { name: 'المحرك (الماكينة)', cat: 'mechanics', type: 'card', icon: '⚙️' },
+            'mech-trans': { name: 'ناقل الحركة (الجير)', cat: 'mechanics', type: 'card', icon: '🕹️' },
+            'mech-brakes': { name: 'نظام الفرامل والمكابح', cat: 'mechanics', type: 'card', icon: '🛑' },
+            'mech-susp': { name: 'الهيئة الأمامية والمساعدات', cat: 'mechanics', type: 'card', icon: '🔗' },
+            'mech-cool': { name: 'نظام التبريد (الروديتر)', cat: 'mechanics', type: 'card', icon: '💧' },
+            'mech-ac': { name: 'التكييف والتدفئة', cat: 'mechanics', type: 'card', icon: '❄️' },
+            'mech-batt': { name: 'البطارية والكهرباء', cat: 'mechanics', type: 'card', icon: '🔋' },
+            'mech-exh': { name: 'نظام العادم (الإكزوست)', cat: 'mechanics', type: 'card', icon: '💨' }
+        };
+
+        let vData = JSON.parse(localStorage.getItem('carDataV4')) || {};
+        let iData = JSON.parse(localStorage.getItem('inspectDataV4')) || {};
+        let activePartId = null;
+
+        window.onload = () => {
+            ['v-owner', 'v-make', 'v-plate', 'v-model', 'v-vin', 'v-km'].forEach(id => {
+                if(vData[id]) document.getElementById(id).value = vData[id];
+            });
+            refreshUI();
+        };
+
+        function saveData() {
+            ['v-owner', 'v-make', 'v-plate', 'v-model', 'v-vin', 'v-km'].forEach(id => {
+                vData[id] = document.getElementById(id).value;
+            });
+            localStorage.setItem('carDataV4', JSON.stringify(vData));
+        }
+
+        // تفريغ كافة الحقول لبدء فحص جديد
+        function resetSystem() {
+            if(confirm('هل أنت متأكد من مسح جميع البيانات لبدء فحص جديد؟')) {
+                localStorage.removeItem('carDataV4');
+                localStorage.removeItem('inspectDataV4');
+                vData = {};
+                iData = {};
+                ['v-owner', 'v-make', 'v-plate', 'v-model', 'v-vin', 'v-km'].forEach(id => {
+                    document.getElementById(id).value = '';
+                });
+                refreshUI();
+                goToStep(1);
+            }
+        }
+
+        function refreshUI() {
+            const mechContainer = document.getElementById('grid-mechanics');
+            mechContainer.innerHTML = '';
+            
+            for (const [id, info] of Object.entries(partMap)) {
+                const saved = iData[id];
+                
+                if (info.type === 'card') {
+                    let cardClass = '', statusText = 'لم يتم الفحص';
+                    if (saved) {
+                        if (saved.status === 'good') { cardClass = 'card-good'; statusText = '✅ سليم'; }
+                        else if (saved.status === 'warning') { cardClass = 'card-warning'; statusText = '⚠️ ملاحظة'; }
+                        else if (saved.status === 'problem') { cardClass = 'card-problem'; statusText = '❌ مشكلة'; }
+                    }
+                    mechContainer.innerHTML += `
+                        <div class="inspect-card ${cardClass}" onclick="openModal('${id}')">
+                            <div class="icon">${info.icon}</div>
+                            <div class="title">${info.name}</div>
+                            <div class="status-badge">${statusText}</div>
+                        </div>
+                    `;
+                } else {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        el.classList.remove('svg-good', 'svg-warning', 'svg-problem', 'btn-good', 'btn-warning', 'btn-problem');
+                        if (saved) {
+                            if (info.type === 'svg') el.classList.add(`svg-${saved.status}`);
+                            if (info.type === 'btn') el.classList.add(`btn-${saved.status}`);
+                        }
+                    }
+                }
+            }
+        }
+
+        function openModal(id) {
+            activePartId = id;
+            document.getElementById('modal-title').innerText = `تقييم: ${partMap[id].name}`;
+            document.getElementById('part-status').value = iData[id] ? iData[id].status : 'good';
+            document.getElementById('part-notes').value = iData[id] ? iData[id].notes : '';
+            document.getElementById('inspectModal').style.display = 'flex';
+        }
+        
+        function closeModal() { document.getElementById('inspectModal').style.display = 'none'; }
+
+        function savePartInspect() {
+            iData[activePartId] = {
+                status: document.getElementById('part-status').value,
+                notes: document.getElementById('part-notes').value
+            };
+            localStorage.setItem('inspectDataV4', JSON.stringify(iData));
+            refreshUI();
+            closeModal();
+        }
+
+        function goToStep(step) {
+            if (step === 2 || step === 3) {
+                if (!document.getElementById('v-make').value || !document.getElementById('v-plate').value) {
+                    alert('يرجى إدخال (نوع السيارة) و (رقم اللوحة) للمتابعة.'); return;
+                }
+            }
+            document.querySelectorAll('.step-content').forEach(el => el.classList.remove('active'));
+            document.getElementById(`step-${step}`).classList.add('active');
+
+            [1, 2, 3].forEach(i => {
+                const ind = document.getElementById(`indicator-${i}`);
+                ind.className = 'step-indicator';
+                if (i < step) ind.classList.add('completed');
+                else if (i === step) ind.classList.add('active');
+            });
+        }
+
+        function generatePDF() {
+            if(Object.keys(iData).length === 0) { alert('لم تقم بفحص وتقييم أي جزء!'); return; }
+
+            // معالجة الـ SVG كصورة (Base64) لضمان طباعتها في ملف الـ PDF بألوانها
+            const svgElement = document.getElementById('main-car-svg').cloneNode(true);
+            svgElement.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            
+            svgElement.querySelectorAll('.car-part').forEach(el => {
+                el.removeAttribute('onclick'); // إزالة الأزرار
+                const savedInfo = iData[el.id];
+                
+                // تطبيق اللون بشكل مباشر Inline Fill
+                if (savedInfo) {
+                    const color = savedInfo.status === 'good' ? '#22c55e' : (savedInfo.status === 'warning' ? '#eab308' : '#ef4444');
+                    el.setAttribute('fill', color);
+                    if (el.tagName === 'g') {
+                        el.querySelectorAll('*').forEach(child => child.setAttribute('fill', color));
+                    }
+                } else {
+                    el.setAttribute('fill', '#e2e8f0'); // اللون الرمادي الافتراضي
+                }
+            });
+
+            // إبقاء المخطط كـ SVG inline داخل التقرير
+            // هذا أكثر موثوقية مع html2canvas من تحويله إلى Base64/IMG
+            svgElement.setAttribute('width', '250');
+            svgElement.setAttribute('height', '500');
+            svgElement.setAttribute('style', 'display:block; width:250px; height:500px; margin:0 auto;');
+            const svgHTML = svgElement.outerHTML;
+
+            let extRows = '', mechRows = '';
+            const stConfig = {
+                'good': { t: 'سليم', bg: '#22c55e', color: '#fff' },
+                'warning': { t: 'يحتاج متابعة', bg: '#eab308', color: '#000' },
+                'problem': { t: 'توجد مشكلة', bg: '#ef4444', color: '#fff' }
+            };
+
+            for (const [id, saved] of Object.entries(iData)) {
+                const info = partMap[id];
+                const st = stConfig[saved.status];
+                const notes = saved.notes.trim() ? saved.notes : '-';
+                const rowHTML = `
+                    <tr>
+                        <td style="border: 1px solid #cbd5e1; padding: 10px; font-weight: bold; width: 30%;">${info.name}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 10px; width: 20%; text-align: center;">
+                            <span style="background:${st.bg}; color:${st.color}; padding:4px 8px; border-radius:4px; font-size:10pt;">${st.t}</span>
+                        </td>
+                        <td style="border: 1px solid #cbd5e1; padding: 10px; width: 50%; color: #475569;">${notes}</td>
+                    </tr>`;
+                
+                if (info.cat === 'exterior') extRows += rowHTML;
+                if (info.cat === 'mechanics') mechRows += rowHTML;
+            }
+
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('ar-JO') + ' | ' + now.toLocaleTimeString('ar-JO');
+
+            const printTemplate = document.createElement('div');
+            printTemplate.innerHTML = `
+                <div style="padding: 30px; font-family: 'Tajawal', sans-serif; direction: rtl; background: #fff; width: 100%; box-sizing: border-box; color: #0f172a;">
+                    <div style="text-align: center; border-bottom: 3px solid #2563eb; padding-bottom: 20px; margin-bottom: 20px;">
+                        <h1 style="margin: 0; font-size: 24pt; color: #1e293b;">تقرير فحص فني شامل للمركبة</h1>
+                        <p style="margin: 5px 0 0 0; font-size: 12pt; color: #64748b;">MOHAMMAD RUM</p>
+                    </div>
+
+                    <table style="width: 100%; margin-bottom: 25px; border-collapse: collapse; font-size: 11pt; background: #f8fafc;">
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>المالك:</strong> ${vData['v-owner'] || '-'}</td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>المركبة:</strong> ${vData['v-make']} - ${vData['v-model'] || ''}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>رقم اللوحة:</strong> <span style="direction:ltr; display:inline-block;">${vData['v-plate']}</span></td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>رقم الشاصي:</strong> ${vData['v-vin'] || '-'}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>التاريخ والوقت:</strong> ${dateStr}</td>
+                            <td style="padding: 10px; border: 1px solid #e2e8f0;"><strong>قراءة العداد:</strong> ${vData['v-km'] ? vData['v-km'] + ' كم' : '-'}</td>
+                        </tr>
+                    </table>
+
+                    ${extRows ? `
+                    <h3 style="background: #1e293b; color: white; padding: 8px 15px; margin-bottom: 0; font-size: 12pt;">أولاً: فحص الهيكل الخارجي والبودي</h3>
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 11pt; text-align: right;">
+                        <thead style="background: #f1f5f9;"><tr><th style="border: 1px solid #cbd5e1; padding: 10px;">الجزء</th><th style="border: 1px solid #cbd5e1; padding: 10px;">الحالة</th><th style="border: 1px solid #cbd5e1; padding: 10px;">الملاحظات</th></tr></thead>
+                        <tbody>${extRows}</tbody>
+                    </table>` : ''}
+
+                    ${mechRows ? `
+                    <h3 style="background: #1e293b; color: white; padding: 8px 15px; margin-bottom: 0; font-size: 12pt;">ثانياً: فحص الميكانيك والأنظمة</h3>
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 11pt; text-align: right;">
+                        <thead style="background: #f1f5f9;"><tr><th style="border: 1px solid #cbd5e1; padding: 10px;">الجزء</th><th style="border: 1px solid #cbd5e1; padding: 10px;">الحالة</th><th style="border: 1px solid #cbd5e1; padding: 10px;">الملاحظات</th></tr></thead>
+                        <tbody>${mechRows}</tbody>
+                    </table>` : ''}
+
+                    <!-- المخطط التوضيحي للسيارة كصورة لضمان الطباعة -->
+                    <h3 style="background: #1e293b; color: white; padding: 8px 15px; margin-bottom: 15px; font-size: 12pt; page-break-before: auto;">ثالثاً: المخطط التوضيحي لحالة الهيكل</h3>
+                    <div style="text-align:center; padding:20px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; overflow:visible;">
+                        ${svgHTML}
+                        <div style="margin-top: 20px; display: flex; justify-content: center; gap: 25px; font-size: 11pt; font-weight: bold;">
+                            <span style="color: #22c55e;">🟩 سليم</span>
+                            <span style="color: #eab308;">🟨 ملاحظة</span>
+                            <span style="color: #ef4444;">🟥 مشكلة</span>
+                        </div>
+                    </div>
+
+                    <!-- التوقيع والموقع -->
+                    <div style="display: flex; justify-content: space-between; margin-top: 40px; padding: 0 20px; font-size: 12pt; font-weight: bold; color: #1e293b;">
+                        <div style="padding-top: 20px;">
+                            المركز: MOHAMMAD RUM<br>الموقع:  الأردن
+                        </div>
+                        <div style="text-align: center;">
+                            توقيع الفاحص المعتمد:<br>
+                            <span style="font-family: Arial, sans-serif; font-size: 16pt; color: #2563eb; font-style: italic; display: inline-block; margin-top: 15px;">MOHAMMAD RUM</span>
+                        </div>
+                    </div>
+                </div>`;
+
+            const btn = document.getElementById('btn-download');
+            btn.innerHTML = '⏳ جاري المعالجة...'; btn.disabled = true;
+
+            html2pdf().set({
+                margin: 0, filename: `تقرير_فحص_${vData['v-make']}.pdf`,
+                image: { type: 'jpeg', quality: 1.0 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).from(printTemplate).save().then(() => {
+                btn.innerHTML = '📑 إنهاء وتوليد التقرير PDF'; btn.disabled = false;
+            });
+        }
+    </script>
+</body>
+</html>
